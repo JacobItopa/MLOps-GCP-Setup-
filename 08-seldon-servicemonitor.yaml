@@ -1,0 +1,21 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: seldon-services
+  namespace: ml-workshop
+  labels:
+    app: odh-monitoring
+    component.opendatahub.io/name: prometheus
+    opendatahub.io/component: "false"
+    team: opendatahub
+spec:
+  endpoints:
+  - interval: 10s
+    path: /prometheus
+    port: http
+    scrapeTimeout: 10s
+  namespaceSelector:
+    any: true
+  selector:
+    matchLabels:
+      app.kubernetes.io/managed-by: seldon-core

@@ -1,0 +1,35 @@
+apiVersion: radanalytics.io/v1
+kind: SparkCluster
+metadata:
+  name: spark-cluster-sample
+  namespace: ml-workshop
+spec:
+  # Container image for Apache Spark
+  # Note: For batch pipeline tasks, KubernetesPodOperator (see 06-airflow-spark-dag-template.py) 
+  # is recommended because it runs serverless and saves cluster RAM.
+  customImage: 'quay.io/jupyter/pyspark-notebook:latest'
+
+  # Spark Master configuration
+  master:
+    instances: '1'
+    cpu: '1'
+    memory: 2Gi
+
+  # Expose Spark Web UI
+  sparkWebUI: true
+
+  # Spark Worker nodes configuration
+  worker:
+    instances: '1'
+    cpu: '1'
+    memory: 2Gi
+
+  # Worker environment variables
+  env:
+  - name: SPARK_WORKER_CORES
+    value: "1"
+
+  # Spark engine configuration overrides
+  sparkConfiguration:
+  - name: spark.sql.conf.autoBroadcastJoinThreshold
+    value: "20971520"

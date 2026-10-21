@@ -1,0 +1,184 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: minio-ml-workshop
+  namespace: ml-workshop
+  labels:
+    app: minio
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio-ml-workshop
+  namespace: ml-workshop
+  labels:
+    app: minio
+spec:
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: minio
+  template:
+    metadata:
+      labels:
+        app: minio
+    spec:
+      containers:
+        - name: minio
+          image: docker.io/alpine/minio:RELEASE.2025-10-15T17-29-55Z
+          imagePullPolicy: IfNotPresent
+          args:
+            - server
+            - /storage
+            - --console-address=:9001
+          env:
+            - name: MINIO_ROOT_USER
+              value: "minio"
+            - name: MINIO_ROOT_PASSWORD
+              value: "minio123"
+            - name: MINIO_ACCESS_KEY
+              value: "minio"
+            - name: MINIO_SECRET_KEY
+              value: "minio123"
+            - name: MINIO_PROMETHEUS_AUTH_TYPE
+              value: "public"
+          ports:
+            - name: s3-api
+              containerPort: 9000
+            - name: console
+              containerPort: 9001
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 2Gi
+          livenessProbe:
+            httpGet:
+              path: /minio/health/live
+              port: 9000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /minio/health/ready
+              port: 9000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          volumeMounts:
+            - name: storage
+              mountPath: /storage
+      volumes:
+        - name: storage
+          persistentVolumeClaim:
+            claimName: minio-ml-workshop
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio-ml-workshop
+  namespace: ml-workshop
+  labels:
+    app: minio
+spec:
+  type: ClusterIP
+  ports:
+    - name: s3-api
+      port: 9000
+      targetPort: 9000
+      protocol: TCP
+    - name: console
+      port: 9001
+      targetPort: 9001
+      protocol: TCP
+  selector:
+    app: minio
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: minio-bootstrap-buckets
+  namespace: ml-workshop
+  labels:
+    app: minio-bootstrap
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app: minio-bootstrap
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: aws-cli
+          image: docker.io/amazon/aws-cli:2.17.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              value: "minio"
+            - name: AWS_SECRET_ACCESS_KEY
+              value: "minio123"
+            - name: AWS_DEFAULT_REGION
+              value: "us-east-1"
+            - name: AWS_REQUEST_CHECKSUM_CALCULATION
+              value: "when_required"
+            - name: AWS_RESPONSE_CHECKSUM_VALIDATION
+              value: "when_required"
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              EP=http://minio-ml-workshop:9000
+              echo "Waiting for MinIO endpoint ($EP) to respond..."
+              until aws --endpoint-url $EP s3 ls >/dev/null 2>&1; do
+                echo "MinIO not ready yet, sleeping 3s..."
+                sleep 3
+              done
+              echo "MinIO is ready! Creating required S3 buckets..."
+              for b in mlflow flights-data airport-data rawdata; do
+                aws --endpoint-url $EP s3 mb s3://$b 2>/dev/null || echo "Bucket '$b' already exists."
+              done
+              echo "Configuring open bucket access policies..."
+              for b in mlflow flights-data airport-data rawdata; do
+                cat <<EOF > /tmp/policy-$b.json
+              {
+                "Version": "2012-10-17",
+                "Statement": [
+                  {
+                    "Effect": "Allow",
+                    "Principal": {"AWS": ["*"]},
+                    "Action": [
+                      "s3:GetBucketLocation",
+                      "s3:ListBucket",
+                      "s3:ListBucketMultipartUploads"
+                    ],
+                    "Resource": ["arn:aws:s3:::$b"]
+                  },
+                  {
+                    "Effect": "Allow",
+                    "Principal": {"AWS": ["*"]},
+                    "Action": [
+                      "s3:GetObject",
+                      "s3:PutObject",
+                      "s3:DeleteObject",
+                      "s3:ListMultipartUploadParts",
+                      "s3:AbortMultipartUpload"
+                    ],
+                    "Resource": ["arn:aws:s3:::$b/*"]
+                  }
+                ]
+              }
+              EOF
+                aws --endpoint-url $EP s3api put-bucket-policy --bucket $b --policy file:///tmp/policy-$b.json || true
+              done
+              echo "Bootstrap complete. Current buckets:"
+              aws --endpoint-url $EP s3 ls

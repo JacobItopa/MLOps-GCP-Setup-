@@ -1,0 +1,87 @@
+# Airflow Helm values for automated Git-Sync and KubernetesPodOperator execution
+# Usage:
+#   helm install airflow apache-airflow/airflow -f 05-airflow-values.yaml -n ml-workshop
+
+# 1. Executor: CeleryExecutor or KubernetesExecutor
+executor: "CeleryExecutor"
+
+# 2. Database Connection (pointing to the shared PostgreSQL service)
+postgresql:
+  enabled: false
+
+data:
+  metadataConnection:
+    user: postgres
+    pass: admin
+    host: mlops-db
+    port: 5432
+    db: postgres
+    sslmode: disable
+
+# 3. Automated Git-Sync (Pulls DAGs directly from your GitHub repository)
+# Change the repo URL below to point to your project DAG repository
+dags:
+  persistence:
+    enabled: false
+  gitSync:
+    enabled: true
+    repo: "https://github.com/<YOUR_GITHUB_USER>/<YOUR_DAG_REPO>.git" # Replace with your repo (e.g., https://github.com/JacobItopa/dag-airflow.git)
+    branch: "main"
+    subPath: "dags"
+    syncWait: 30
+    # For private repositories, uncomment and reference your SSH private key secret:
+    # sshKeySecret: airflow-git-ssh-secret
+    resources:
+      limits:
+        cpu: 100m
+        memory: 128Mi
+      requests:
+        cpu: 50m
+        memory: 64Mi
+
+# Production airflow core configs: disable example DAGs to save memory
+config:
+  core:
+    load_examples: "False"
+  kubernetes_executor:
+    worker_service_account_name: "airflow-worker-sa"
+
+# 4. Service Account & RBAC for KubernetesPodOperator
+# Airflow workers require permissions to create and monitor pods in the namespace
+serviceAccount:
+  create: true
+  name: airflow-worker-sa
+
+rbac:
+  create: true
+
+# 5. Airflow Webserver & Scheduler resources
+webserver:
+  replicas: 1
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+
+scheduler:
+  replicas: 1
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+
+workers:
+  replicas: 1
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1024Mi
+    requests:
+      cpu: 250m
+      memory: 512Mi

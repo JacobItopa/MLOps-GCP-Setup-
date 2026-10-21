@@ -1,0 +1,23 @@
+apiVersion: machinelearning.seldon.io/v1
+kind: SeldonDeployment
+metadata:
+  name: model-scikit
+  namespace: ml-workshop
+spec:
+  name: scikit-deployment
+  predictors:
+    - componentSpecs:
+        - spec:
+            containers:
+              - name: predictor
+                image: y2jay1/seldon-model:v1.0
+                imagePullPolicy: IfNotPresent
+      graph:
+        name: predictor
+        type: MODEL
+        endpoint:
+          type: REST
+          service_host: localhost
+          service_port: 9000
+      name: scikit-predictor
+      replicas: 1

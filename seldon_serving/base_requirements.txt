@@ -1,0 +1,5 @@
+seldon-core>=1.15.0
+joblib
+pandas
+scikit-learn
+category_encoders
