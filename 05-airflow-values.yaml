@@ -15,7 +15,7 @@ data:
     pass: admin
     host: mlops-db
     port: 5432
-    db: postgres
+    db: airflow
     sslmode: disable
 
 # 3. Automated Git-Sync (Pulls DAGs directly from your GitHub repository)
