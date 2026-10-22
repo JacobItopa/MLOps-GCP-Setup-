@@ -28,7 +28,7 @@ dags:
     repo: "https://github.com/<YOUR_GITHUB_USER>/<YOUR_DAG_REPO>.git" # Replace with your repo (e.g., https://github.com/JacobItopa/dag-airflow.git)
     branch: "main"
     subPath: "dags"
-    syncWait: 30
+    wait: 30
     # For private repositories, uncomment and reference your SSH private key secret:
     # sshKeySecret: airflow-git-ssh-secret
     resources:
