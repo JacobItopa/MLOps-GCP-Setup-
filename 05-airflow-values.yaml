@@ -25,7 +25,7 @@ dags:
     enabled: false
   gitSync:
     enabled: true
-    repo: "https://github.com/JacobItopa/dag-airflow.git"
+    repo: "https://github.com/JacobItopa/uterine_dag.git"
     branch: "main"
     subPath: "dags"
     wait: 30
